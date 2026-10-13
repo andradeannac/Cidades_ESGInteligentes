@@ -212,23 +212,23 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.la
 > Link da execução do pipeline: `https://github.com/<usuario>/<repositorio>/actions/runs/<id>`
 
 **Pipeline completo (4 jobs verdes)**
-![Pipeline](docs/evidencias/01-pipeline-visao-geral.png)
+![Pipeline](docs/evidencias/01-pipeline-visao-geral.png.png)
 
 **Build e testes**
-![Build e testes](docs/evidencias/02-build-testes.png)
+![Build e testes](docs/evidencias/02-build-testes.png.png)
 
 **Imagem publicada no ghcr.io**
-![Imagem](docs/evidencias/03-imagem-ghcr.png)
+![Imagem](docs/evidencias/03-imagem-ghcr.png.png)
 
 **Deploy em staging + smoke test**
-![Staging](docs/evidencias/04-deploy-staging.png)
+![Staging](docs/evidencias/04-deploy-staging.png.png)
 
 **Aprovação e deploy em produção + smoke test**
 ![Produção](docs/evidencias/05-deploy-producao.png)
 
 **Ambientes funcionando (Swagger / actuator/info em staging e produção)**
-![Staging funcionando](docs/evidencias/06-staging-swagger.png)
-![Produção funcionando](docs/evidencias/07-producao-swagger.png)
+![Staging funcionando](docs/evidencias/06-staging-swagger.png.png)
+![Produção funcionando](docs/evidencias/07-producao-swagger.png.png)
 
 **Validação estática dos arquivos de DevOps** — saída real em [`docs/evidencias/validacao-estatica.txt`](docs/evidencias/validacao-estatica.txt) (actionlint, hadolint, shellcheck, `docker compose config` dos três ambientes).
 
@@ -273,6 +273,6 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.la
 | Dockerfile funcional | ☑ |
 | docker-compose.yml ou arquivos Kubernetes | ☑ |
 | Pipeline com etapas de build, teste e deploy | ☑ |
-| README.md com instruções e prints | ☐ *(marcar após inserir os prints em `docs/evidencias/`)* |
-| Documentação técnica com evidências (PDF ou PPT) | ☐ *(marcar após inserir os prints no documento)* |
-| Deploy realizado nos ambientes staging e produção | ☐ *(marcar após a primeira execução verde do pipeline)* |
+| README.md com instruções e prints | ☑ |
+| Documentação técnica com evidências (PDF ou PPT) | ☑ |
+| Deploy realizado nos ambientes staging e produção |☑ |
