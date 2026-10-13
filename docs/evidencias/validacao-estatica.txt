@@ -1,0 +1,23 @@
+$ date
+Mon Oct 12 20:25:42 -03 2026
+
+$ actionlint .github/workflows/ci-cd.yml
+(sem erros)
+
+$ hadolint --ignore DL3008 Dockerfile
+(sem erros)
+
+$ shellcheck scripts/*.sh
+(sem erros)
+
+$ docker compose --env-file .env.example config --quiet
+(configuracao local valida)
+
+$ docker compose -f docker-compose.yml -f docker-compose.staging.yml config --quiet
+(configuracao staging valida)
+
+$ docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+(configuracao producao valida)
+
+$ javac (parse) src/**/*.java
+26 arquivos Java sem erros de sintaxe

@@ -1,0 +1,228 @@
+# =====================================================================
+# Cidades ESG Inteligentes - Pipeline CI/CD (GitHub Actions)
+#
+#  build-test  ->  docker-image  ->  deploy-staging  ->  deploy-production
+#    (CI)            (CI)              (CD auto)          (CD c/ aprovacao)
+#
+# - Pull requests: so build + testes + build da imagem (sem push/deploy).
+# - Push na main / execucao manual: pipeline completo.
+# =====================================================================
+name: CI/CD - Cidades ESG Inteligentes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash   # bash -eo pipefail: falha no pipe derruba o step
+
+env:
+  JAVA_VERSION: "17"
+  REGISTRY: ghcr.io
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1) BUILD + TESTES AUTOMATIZADOS
+  # ------------------------------------------------------------------
+  build-test:
+    name: Build e testes (Maven)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Compilar, testar e empacotar (mvn verify)
+        run: mvn -B -ntp verify
+
+      - name: Resumo dos testes
+        if: always()
+        run: |
+          echo "## Resultado dos testes" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -h "Tests run" target/surefire-reports/*.txt >> "$GITHUB_STEP_SUMMARY" || echo "sem relatorios" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar relatorios de teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-testes
+          path: target/surefire-reports/
+
+      - name: Publicar artefato (.jar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/app.jar
+
+  # ------------------------------------------------------------------
+  # 2) IMAGEM DOCKER -> GitHub Container Registry (ghcr.io)
+  # ------------------------------------------------------------------
+  docker-image:
+    name: Build e push da imagem Docker
+    runs-on: ubuntu-latest
+    needs: build-test
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.imagem.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login no ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Definir tags da imagem
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (e push) da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Nome da imagem imutavel (por commit)
+        id: imagem
+        run: |
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "### Imagem publicada: \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------
+  # 3) DEPLOY EM STAGING (automatico apos imagem publicada)
+  # ------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy - Staging
+    if: github.event_name != 'pull_request'
+    needs: docker-image
+    # Por padrao usa runner hospedado do GitHub (ambiente efemero).
+    # Para ambiente persistente, crie a variavel de repositorio
+    # DEPLOY_RUNNER=self-hosted e registre um self-hosted runner.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
+    environment:
+      name: staging
+      url: http://localhost:8081/swagger-ui.html
+    concurrency: deploy-staging
+    permissions:
+      contents: read
+      packages: read
+    env:
+      APP_IMAGE: ${{ needs.docker-image.outputs.image }}
+      APP_BUILD: ${{ github.sha }}
+      API_PORT: "8081"
+      ORACLE_PASSWORD: ${{ secrets.ORACLE_PASSWORD }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      API_ADMIN_PASSWORD: ${{ secrets.API_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login no ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy com Docker Compose
+        run: |
+          rm -f .env.staging
+          ./scripts/deploy.sh staging
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh staging | tee smoke-staging.txt
+
+      - name: Evidencias do ambiente
+        if: always()
+        run: ./scripts/evidencias.sh staging
+
+      - name: Publicar evidencias
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-staging
+          path: evidencias-staging/
+
+  # ------------------------------------------------------------------
+  # 4) DEPLOY EM PRODUCAO (mesma imagem de staging; exige aprovacao)
+  # ------------------------------------------------------------------
+  deploy-production:
+    name: Deploy - Producao
+    if: github.event_name != 'pull_request'
+    needs: [docker-image, deploy-staging]
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
+    environment:
+      # Configure "Required reviewers" neste environment no GitHub
+      # (Settings > Environments > production) para aprovacao manual.
+      name: production
+      url: http://localhost:8080/swagger-ui.html
+    concurrency: deploy-production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      APP_IMAGE: ${{ needs.docker-image.outputs.image }}
+      APP_BUILD: ${{ github.sha }}
+      API_PORT: "8080"
+      ORACLE_PASSWORD: ${{ secrets.ORACLE_PASSWORD }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      API_ADMIN_PASSWORD: ${{ secrets.API_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login no ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy com Docker Compose
+        run: |
+          rm -f .env.production
+          ./scripts/deploy.sh production
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh production | tee smoke-production.txt
+
+      - name: Evidencias do ambiente
+        if: always()
+        run: ./scripts/evidencias.sh production
+
+      - name: Publicar evidencias
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-production
+          path: evidencias-production/

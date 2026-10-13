@@ -1,0 +1,65 @@
+# =====================================================================
+# Orquestracao base: API + Oracle, rede isolada, volume persistente.
+# Os valores sensiveis vem do arquivo .env (copie de .env.example).
+#
+#  Local ........ docker compose up -d --build          (usa tambem docker-compose.override.yml)
+#  Staging ...... ./scripts/deploy.sh staging           (usa docker-compose.staging.yml)
+#  Producao ..... ./scripts/deploy.sh production        (usa docker-compose.prod.yml)
+# =====================================================================
+name: ${COMPOSE_PROJECT_NAME:-esg-local}
+
+services:
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?defina ORACLE_PASSWORD no .env}
+      APP_USER: ${DB_USERNAME:-APP_MOBILIDADE}
+      APP_USER_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    networks:
+      - esg-backend
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
+  api:
+    image: ${APP_IMAGE:-cidades-esg-api:local}
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_BUILD: ${APP_BUILD:-local}
+      SERVER_PORT: 8080
+      DB_URL: jdbc:oracle:thin:@oracle-db:1521/FREEPDB1
+      DB_USERNAME: ${DB_USERNAME:-APP_MOBILIDADE}
+      DB_PASSWORD: ${DB_PASSWORD}
+      API_ADMIN_USER: ${API_ADMIN_USER:-admin}
+      API_ADMIN_PASSWORD: ${API_ADMIN_PASSWORD:?defina API_ADMIN_PASSWORD no .env}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      LOGGING_FILE_NAME: /app/logs/api.log
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - app-logs:/app/logs
+    networks:
+      - esg-backend
+      - esg-frontend
+    restart: unless-stopped
+
+networks:
+  # Rede interna: o banco NAO fica acessivel fora do Docker
+  esg-backend:
+    internal: true
+  # Rede de borda: apenas a API publica porta
+  esg-frontend: {}
+
+volumes:
+  oracle-data:
+  app-logs:

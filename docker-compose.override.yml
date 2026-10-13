@@ -1,0 +1,16 @@
+# Carregado automaticamente apenas em "docker compose up" local.
+# Constroi a imagem a partir do Dockerfile e expoe o Oracle somente em 127.0.0.1
+# para inspecao via DBeaver / SQL Developer.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      JPA_SHOW_SQL: "true"
+  oracle-db:
+    ports:
+      - "127.0.0.1:1521:1521"
+    networks:
+      - esg-backend
+      - esg-frontend

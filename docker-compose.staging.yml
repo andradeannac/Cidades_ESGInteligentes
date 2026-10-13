@@ -1,0 +1,10 @@
+# Ambiente de STAGING: imagem publicada pelo pipeline, porta 8081, dados de exemplo ligados.
+services:
+  api:
+    environment:
+      APP_ENV: staging
+      APP_SEED_ENABLED: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 768m

@@ -1,0 +1,26 @@
+# Ambiente de PRODUCAO: imagem promovida de staging, porta 8080,
+# restart sempre, limites de recursos e logs rotacionados.
+services:
+  api:
+    environment:
+      APP_ENV: production
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      JPA_SHOW_SQL: "false"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+  oracle-db:
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

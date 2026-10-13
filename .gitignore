@@ -1,0 +1,8 @@
+target/
+.idea/
+*.iml
+.DS_Store
+# Arquivos de ambiente com segredos reais nunca vao para o git
+.env
+.env.staging
+.env.production
