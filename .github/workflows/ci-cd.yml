@@ -158,14 +158,14 @@ jobs:
       - name: Deploy com Docker Compose
         run: |
           rm -f .env.staging
-          ./scripts/deploy.sh staging
+          bash scripts/deploy.sh staging
 
       - name: Smoke test
-        run: ./scripts/smoke-test.sh staging | tee smoke-staging.txt
+        run: bash scripts/smoke-test.sh staging | tee smoke-staging.txt
 
       - name: Evidencias do ambiente
         if: always()
-        run: ./scripts/evidencias.sh staging
+        run: bash scripts/evidencias.sh staging
 
       - name: Publicar evidencias
         if: always()
@@ -211,14 +211,14 @@ jobs:
       - name: Deploy com Docker Compose
         run: |
           rm -f .env.production
-          ./scripts/deploy.sh production
+          bash scripts/deploy.sh production
 
       - name: Smoke test
-        run: ./scripts/smoke-test.sh production | tee smoke-production.txt
+        run: bash scripts/smoke-test.sh production | tee smoke-production.txt
 
       - name: Evidencias do ambiente
         if: always()
-        run: ./scripts/evidencias.sh production
+        run: bash scripts/evidencias.sh production
 
       - name: Publicar evidencias
         if: always()
